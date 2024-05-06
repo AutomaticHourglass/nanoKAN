@@ -1,7 +1,5 @@
 
-# nanoGPT
-
-![nanoGPT](assets/nanogpt.jpg)
+# nanoKAN
 
 The Fusion of efficient-kan and nanoGPT is called nanoKAN. The original implementation of KAN is available [here](https://github.com/Blealtan/efficient-kan).
 
