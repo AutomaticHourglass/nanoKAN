@@ -9,7 +9,11 @@ The simplest, fastest repository for training/finetuning medium-sized GPTs/KANs.
 
 ![repro124m](assets/gpt2_124M_loss.png)
 
-Current implementation is a 
+Current implementation has a simple switch mechanism to use the efficient-kan implementation. 
+
+To activate the KAN Network, you can simply set the `kan` flag in the config file to `True`.
+
+The efficient-kan implementation is a rewrite of the original implementation of KAN. The original implementation of KAN is available [here](https://github.com/KindXiaoming/pykan)
 
 Because the code is so simple, it is very easy to hack to your needs, train new models from scratch, or finetune pretrained checkpoints (e.g. biggest one currently available as a starting point would be the GPT-2 1.3B model from OpenAI).
 

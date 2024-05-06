@@ -18,7 +18,7 @@ gradient_accumulation_steps = 1
 batch_size = 64
 block_size = 64 # context of up to 256 previous characters
 
-kan = False # use KAN instead of GPT
+kan = True # use KAN instead of GPT
 
 # baby GPT model :)
 n_layer = 4
