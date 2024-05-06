@@ -161,7 +161,7 @@ class KAN(nn.Module):
             scale_base = 1 / np.sqrt(config.width[l]) + (torch.randn(config.width[l] * config.width[l + 1], ) * 2 - 1) * config.noise_scale_base
             sp_batch = KANLayer(in_dim=config.width[l], out_dim=config.width[l + 1], num=config.grid, k=config.k, noise_scale=config.noise_scale,
                                 scale_base=scale_base, scale_sp=1., base_fun=config.base_fun, grid_eps=config.grid_eps,
-                                grid_range=config.grid_range, sp_trainable=config.sp_trainable, sb_trainable=config.sb_trainable)
+                                grid_range=config.grid_range, sp_trainable=config.sp_trainable, sb_trainable=config.sb_trainable, device=config.device)
             self.act_fun.append(sp_batch)
 
             # bias
@@ -198,8 +198,8 @@ class KAN(nn.Module):
         if tokens.shape[1] > self.block_size:
             tokens = tokens[:,-self.block_size:]
         tok_emb = self.te(tokens)
-        pos_emb = self.pe(torch.arange(tokens.shape[1])).unsqueeze(0)
-        return tok_emb + pos_emb
+        pos_emb = self.pe(torch.arange(tokens.shape[1],device=self.device)).unsqueeze(0)
+        return (tok_emb + pos_emb).to(self.device)
 
     def initialize_from_another_model(self, another_model, x):
         '''

@@ -182,12 +182,12 @@ class KANLayer(nn.Module):
         # x = torch.einsum('ijl,k->iklj', x, torch.ones(self.out_dim, ).to(self.device)).reshape(batch_size,
         #                                                                                      self.size).permute(1, 0)
         # x = torch.einsum('ij,k->ikj', x, torch.ones(self.out_dim, ).to(self.device)).reshape(batch_size, self.size)
-        x = torch.einsum('ilj,lk->iklj', x, torch.ones(x.shape[1], self.out_dim).to(self.device)).reshape(-1, self.size).permute(1, 0)
+        x = torch.einsum('ilj,lk->iklj', x, torch.ones(x.shape[1], self.out_dim, device=self.device).to(self.device)).reshape(-1, self.size).permute(1, 0)
 
         preacts = x.permute(1, 0).clone().reshape(-1, self.out_dim, self.in_dim)
         base = self.base_fun(x).permute(1, 0)  # shape (batch, size)
         y = coef2curve(x_eval=x, grid=self.grid[self.weight_sharing], coef=self.coef[self.weight_sharing],
-                       k=self.k)  # shape (size, batch)
+                       k=self.k,device=self.device)  # shape (size, batch)
         y = y.permute(1, 0)  # shape (batch, size)
         postspline = y.clone().reshape(-1, self.out_dim, self.in_dim)
         y = self.scale_base.unsqueeze(dim=0) * base + self.scale_sp.unsqueeze(dim=0) * y
