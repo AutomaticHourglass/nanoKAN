@@ -15,6 +15,9 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+import kan
+
+
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
@@ -32,9 +35,21 @@ class CausalSelfAttention(nn.Module):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        if config.kan:
+            print("using KANLinear for attention projection")
+            self.c_attn = kan.KANLinear(config.n_embd, 3 * config.n_embd)
+        else:
+            print("using nn.Linear for attention projection")
+            self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd,bias=config.bias)
+
         # output projection
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        if config.kan:
+            print("using KANLinear for output projection")
+            self.c_proj = kan.KANLinear(config.n_embd, config.n_embd)
+        else:
+            print("using nn.Linear for output projection")
+            self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+
         # regularization
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
@@ -42,7 +57,8 @@ class CausalSelfAttention(nn.Module):
         self.n_embd = config.n_embd
         self.dropout = config.dropout
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
-        self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
+        # self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
+        self.flash = False
         if not self.flash:
             print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
             # causal mask to ensure that attention is only applied to the left in the input sequence
@@ -53,7 +69,9 @@ class CausalSelfAttention(nn.Module):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
+        attn = self.c_attn(x.view(-1,x.shape[-1])).view(x.shape[0],x.shape[1],-1) # shape (B, T, 3 * n_embd)
+
+        q, k, v  = attn.split(self.n_embd, dim=2)
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
@@ -72,16 +90,24 @@ class CausalSelfAttention(nn.Module):
         y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
 
         # output projection
-        y = self.resid_dropout(self.c_proj(y))
+        proj = self.c_proj(y.view(-1,y.shape[-1])).view(B, T, -1)
+        y = self.resid_dropout(proj)
         return y
 
 class MLP(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
+        if config.kan:
+            print("using KANLinear for MLP")
+            self.c_fc    = kan.KANLinear(config.n_embd, 4 * config.n_embd)
+            self.c_proj  = kan.KANLinear(4 * config.n_embd, config.n_embd)
+        else:
+            print("using nn.Linear for MLP")
+            self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
+            self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
+
         self.gelu    = nn.GELU()
-        self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
@@ -102,7 +128,9 @@ class Block(nn.Module):
 
     def forward(self, x):
         x = x + self.attn(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
+        q = self.ln_2(x)
+        q = self.mlp(q.view(-1,q.shape[-1])).view_as(q)
+        x = x + q
         return x
 
 @dataclass
@@ -114,6 +142,7 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    kan: bool = False
 
 class GPT(nn.Module):
 
